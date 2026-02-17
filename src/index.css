@@ -369,6 +369,16 @@ h2 {
   text-align: center;
 }
 
+.display-format {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg);
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  margin-bottom: 1rem;
+}
+
 .display-barcode {
   width: 100%;
   margin-bottom: 1.5rem;

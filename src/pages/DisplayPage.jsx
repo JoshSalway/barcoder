@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
+import { getFormat } from '../services/barcode';
 import storage from '../services/storage';
 
 export default function DisplayPage() {
@@ -36,6 +37,7 @@ export default function DisplayPage() {
       </button>
 
       <h2 className="display-title">{item.title}</h2>
+      <span className="display-format">{getFormat(item.format).label}</span>
 
       <div className="display-barcode">
         <BarcodeRenderer digits={item.digits} format={item.format} large />
