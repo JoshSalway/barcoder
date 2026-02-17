@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
-import { normalizeDigits, FORMATS, isQR, nextInSequence, prevInSequence } from '../services/barcode';
+import { getStatus, FORMATS, isQR, nextInSequence, prevInSequence } from '../services/barcode';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -13,10 +13,12 @@ export default function CreatePage() {
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  const bs = getStatus(digits, format); // { normalized, resolvedFormat, status, error }
+  const qr = isQR(format);
+
   function handleSave() {
-    if (!digits.trim()) return;
-    const normalized = normalizeDigits(digits, format);
-    storage.save({ title: title.trim() || normalized, digits: normalized, format });
+    if (!bs.normalized) return;
+    storage.save({ title: title.trim() || bs.normalized, digits: bs.normalized, format: bs.resolvedFormat || format });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }
@@ -28,8 +30,8 @@ export default function CreatePage() {
   }
 
   function handleCopy() {
-    const normalized = normalizeDigits(digits, format);
-    navigator.clipboard.writeText(normalized).then(() => {
+    if (!bs.normalized) return;
+    navigator.clipboard.writeText(bs.normalized).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -40,12 +42,12 @@ export default function CreatePage() {
       <h1>Create Barcode</h1>
 
       <div className="input-group">
-        <label htmlFor="digits-input">{isQR(format) ? 'Content' : 'Digits'}</label>
+        <label htmlFor="digits-input">{qr ? 'Content' : 'Digits'}</label>
         <input
           id="digits-input"
           type="text"
-          inputMode={isQR(format) ? 'text' : 'numeric'}
-          placeholder={isQR(format) ? 'Enter text or URL' : 'Enter barcode digits'}
+          inputMode={qr ? 'text' : 'numeric'}
+          placeholder={qr ? 'Enter text or URL' : 'Enter barcode digits'}
           value={digits}
           onChange={(e) => {
             setDigits(e.target.value);
@@ -68,16 +70,22 @@ export default function CreatePage() {
         </select>
       </div>
 
-      {digits && (
+      {digits && (bs.error
+        ? <p className="status-bar status-error">{bs.error}</p>
+        : bs.status
+          ? <p className="status-bar status-ok">{bs.status}</p>
+          : null
+      )}
+
+      {bs.normalized && (
         <div className="barcode-preview">
-          <BarcodeRenderer digits={digits} format={format} />
+          <BarcodeRenderer digits={bs.normalized} format={bs.resolvedFormat || format} />
         </div>
       )}
 
-      {digits && !isQR(format) && (() => {
-        const norm = normalizeDigits(digits, format);
-        const seqPrev = /^\d+$/.test(norm) ? prevInSequence(norm, format) : null;
-        const seqNext = /^\d+$/.test(norm) ? nextInSequence(norm, format) : null;
+      {bs.normalized && !qr && (() => {
+        const seqPrev = /^\d+$/.test(bs.normalized) ? prevInSequence(bs.normalized, bs.resolvedFormat || format) : null;
+        const seqNext = /^\d+$/.test(bs.normalized) ? nextInSequence(bs.normalized, bs.resolvedFormat || format) : null;
         if (!seqPrev && !seqNext) return null;
         const savedSet = new Set(storage.getAll().map((i) => i.digits));
         return (
@@ -102,7 +110,7 @@ export default function CreatePage() {
         );
       })()}
 
-      {digits && (
+      {bs.normalized && (
         <div className="action-row">
           <button className="btn btn-secondary" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy Digits'}
@@ -124,7 +132,7 @@ export default function CreatePage() {
         <button
           className="btn btn-primary btn-full"
           onClick={handleSave}
-          disabled={!digits.trim()}
+          disabled={!bs.normalized}
         >
           {saved ? 'Saved!' : 'Save Barcode'}
         </button>

@@ -98,6 +98,128 @@ export function resolveFormat(digits, format) {
 }
 
 /**
+ * Validates rawDigits against format, auto-appends check digits where the
+ * user is one digit short, and returns a structured result for the UI.
+ *
+ * Returns:
+ *   {
+ *     normalized:     string | null  — null means "do not render"
+ *     resolvedFormat: string | null
+ *     status:         string         — informational message (grey)
+ *     error:          string | null  — validation error (red)
+ *   }
+ *
+ * Formats with explicit validation: EAN13, UPC (UPC-A), EAN8.
+ * All other explicit formats are passed through without validation.
+ * Auto mode validates check digits for length-matched EAN/UPC inputs.
+ */
+export function getStatus(rawDigits, format) {
+  const digits = rawDigits.trim();
+  if (!digits) return { normalized: null, resolvedFormat: null, status: '', error: null };
+
+  const onlyDigits = /^\d+$/.test(digits);
+
+  function isValidCheck(fmt, full) {
+    const payloadLen = { EAN13: 12, EAN8: 7, UPC: 11 }[fmt];
+    if (!payloadLen || full.length !== payloadLen + 1) return false;
+    let expected;
+    if (fmt === 'EAN13') expected = calcEAN13CheckDigit(full.slice(0, 12));
+    else if (fmt === 'EAN8') expected = calcEAN8CheckDigit(full.slice(0, 7));
+    else expected = calcUPCACheckDigit(full.slice(0, 11));
+    return expected === full[payloadLen];
+  }
+
+  // ── Auto ────────────────────────────────────────────────────────────────
+  if (format === 'auto') {
+    if (onlyDigits) {
+      if (digits.length === 13) {
+        return isValidCheck('EAN13', digits)
+          ? { normalized: digits, resolvedFormat: 'EAN13', status: 'Auto: detected EAN-13 (valid)', error: null }
+          : { normalized: null,   resolvedFormat: 'EAN13', status: '', error: 'EAN-13: invalid check digit' };
+      }
+      if (digits.length === 12) {
+        return isValidCheck('UPC', digits)
+          ? { normalized: digits, resolvedFormat: 'UPC', status: 'Auto: detected UPC-A (valid)', error: null }
+          : { normalized: null,   resolvedFormat: 'UPC', status: '',
+              error: 'UPC-A: invalid check digit — select EAN-13 to auto-add a check digit' };
+      }
+      if (digits.length === 8) {
+        return isValidCheck('EAN8', digits)
+          ? { normalized: digits, resolvedFormat: 'EAN8', status: 'Auto: detected EAN-8 (valid)', error: null }
+          : { normalized: null,   resolvedFormat: 'EAN8', status: '', error: 'EAN-8: invalid check digit' };
+      }
+      if (digits.length === 14)
+        return { normalized: digits, resolvedFormat: 'ITF14', status: 'Auto: detected ITF-14', error: null };
+    }
+    // Partial numeric, alpha, or any other length → Code 128
+    return { normalized: digits, resolvedFormat: 'CODE128', status: 'Auto: Code 128', error: null };
+  }
+
+  // ── EAN-13 ──────────────────────────────────────────────────────────────
+  if (format === 'EAN13') {
+    if (!onlyDigits)
+      return { normalized: null, resolvedFormat: 'EAN13', status: '', error: 'EAN-13: digits only' };
+    if (digits.length === 12) {
+      const check = calcEAN13CheckDigit(digits);
+      return { normalized: digits + check, resolvedFormat: 'EAN13',
+               status: `EAN-13: added check digit ${check}`, error: null };
+    }
+    if (digits.length === 13) {
+      return isValidCheck('EAN13', digits)
+        ? { normalized: digits, resolvedFormat: 'EAN13', status: 'EAN-13: valid', error: null }
+        : { normalized: null,   resolvedFormat: 'EAN13', status: '', error: 'EAN-13: invalid check digit' };
+    }
+    if (digits.length > 13)
+      return { normalized: null, resolvedFormat: 'EAN13', status: '', error: 'EAN-13: too many digits (max 13)' };
+    return { normalized: null, resolvedFormat: 'EAN13',
+             status: 'EAN-13: enter 12 digits (check digit auto-added) or 13', error: null };
+  }
+
+  // ── UPC-A ───────────────────────────────────────────────────────────────
+  if (format === 'UPC') {
+    if (!onlyDigits)
+      return { normalized: null, resolvedFormat: 'UPC', status: '', error: 'UPC-A: digits only' };
+    if (digits.length === 11) {
+      const check = calcUPCACheckDigit(digits);
+      return { normalized: digits + check, resolvedFormat: 'UPC',
+               status: `UPC-A: added check digit ${check}`, error: null };
+    }
+    if (digits.length === 12) {
+      return isValidCheck('UPC', digits)
+        ? { normalized: digits, resolvedFormat: 'UPC', status: 'UPC-A: valid', error: null }
+        : { normalized: null,   resolvedFormat: 'UPC', status: '', error: 'UPC-A: invalid check digit' };
+    }
+    if (digits.length > 12)
+      return { normalized: null, resolvedFormat: 'UPC', status: '', error: 'UPC-A: too many digits (max 12)' };
+    return { normalized: null, resolvedFormat: 'UPC',
+             status: 'UPC-A: enter 11 digits (check digit auto-added) or 12', error: null };
+  }
+
+  // ── EAN-8 ───────────────────────────────────────────────────────────────
+  if (format === 'EAN8') {
+    if (!onlyDigits)
+      return { normalized: null, resolvedFormat: 'EAN8', status: '', error: 'EAN-8: digits only' };
+    if (digits.length === 7) {
+      const check = calcEAN8CheckDigit(digits);
+      return { normalized: digits + check, resolvedFormat: 'EAN8',
+               status: `EAN-8: added check digit ${check}`, error: null };
+    }
+    if (digits.length === 8) {
+      return isValidCheck('EAN8', digits)
+        ? { normalized: digits, resolvedFormat: 'EAN8', status: 'EAN-8: valid', error: null }
+        : { normalized: null,   resolvedFormat: 'EAN8', status: '', error: 'EAN-8: invalid check digit' };
+    }
+    if (digits.length > 8)
+      return { normalized: null, resolvedFormat: 'EAN8', status: '', error: 'EAN-8: too many digits (max 8)' };
+    return { normalized: null, resolvedFormat: 'EAN8',
+             status: 'EAN-8: enter 7 digits (check digit auto-added) or 8', error: null };
+  }
+
+  // ── All other explicit formats (Code128, Code39, ITF-14, QR, …) ─────────
+  return { normalized: digits, resolvedFormat: format, status: '', error: null };
+}
+
+/**
  * Shift a barcode by `delta` steps in the numeric sequence.
  * For EAN/UPC formats the payload (all digits except the check digit) is
  * incremented and the check digit is recalculated automatically.

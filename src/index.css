@@ -374,6 +374,25 @@ h2 {
   margin-bottom: 1.5rem;
 }
 
+/* Status / Error Bar (Create Page) */
+.status-bar {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.55rem 0.85rem;
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+
+.status-ok {
+  background: #e8f4ff;
+  color: #0055bb;
+}
+
+.status-error {
+  background: #fff0ef;
+  color: var(--danger);
+}
+
 /* Sequence Navigation (Create Page) */
 .seq-nav {
   display: flex;
