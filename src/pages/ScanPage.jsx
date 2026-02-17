@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrowserMultiFormatReader } from '@zxing/browser';
+import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 
 export default function ScanPage() {
   const navigate = useNavigate();
@@ -52,19 +53,62 @@ export default function ScanPage() {
 
     const img = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const reader = new BrowserMultiFormatReader();
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext('2d').drawImage(img, 0, 0);
-      reader.decodeFromCanvas(canvas).then((result) => {
-        navigate(`/?digits=${encodeURIComponent(result.getText())}`);
-      }).catch(() => {
-        setError('Could not read a barcode from this image. Try a clearer photo.');
-      }).finally(() => {
+    img.onload = async () => {
+      try {
+        // Set up hints for aggressive scanning
+        const hints = new Map();
+        hints.set(DecodeHintType.TRY_HARDER, true);
+        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+          BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
+          BarcodeFormat.ITF, BarcodeFormat.CODABAR,
+          BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED,
+          BarcodeFormat.AZTEC, BarcodeFormat.PDF_417,
+        ]);
+
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+
+        // Try at multiple scales/crops to find the barcode in a busy image
+        const attempts = [
+          // Full image
+          { sx: 0, sy: 0, sw: w, sh: h },
+          // Center crop (middle 60%)
+          { sx: w * 0.2, sy: h * 0.2, sw: w * 0.6, sh: h * 0.6 },
+          // Bottom half (barcodes often at bottom of products)
+          { sx: 0, sy: h * 0.4, sw: w, sh: h * 0.6 },
+          // Top half
+          { sx: 0, sy: 0, sw: w, sh: h * 0.6 },
+          // Middle horizontal strip
+          { sx: 0, sy: h * 0.25, sw: w, sh: h * 0.5 },
+        ];
+
+        let found = null;
+        for (const { sx, sy, sw, sh } of attempts) {
+          const canvas = document.createElement('canvas');
+          canvas.width = sw;
+          canvas.height = sh;
+          canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+
+          const reader = new BrowserMultiFormatReader(hints);
+          try {
+            found = await reader.decodeFromCanvas(canvas);
+            if (found) break;
+          } catch {
+            // Try next region
+          }
+        }
+
+        if (found) {
+          navigate(`/?digits=${encodeURIComponent(found.getText())}`);
+        } else {
+          setError('Could not find a barcode in this image. Try cropping closer to the barcode.');
+        }
+      } finally {
         URL.revokeObjectURL(url);
-      });
+      }
     };
     img.src = url;
     // Reset so same file can be re-selected
