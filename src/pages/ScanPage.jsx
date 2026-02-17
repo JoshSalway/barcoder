@@ -5,6 +5,7 @@ import { BrowserMultiFormatReader } from '@zxing/browser';
 export default function ScanPage() {
   const navigate = useNavigate();
   const videoRef = useRef(null);
+  const fileInputRef = useRef(null);
   const readerRef = useRef(null);
   const controlsRef = useRef(null);
   const [error, setError] = useState(null);
@@ -45,6 +46,31 @@ export default function ScanPage() {
     };
   }, [scanning, navigate, stopScanning]);
 
+  function handlePhotoUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const reader = new BrowserMultiFormatReader();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      reader.decodeFromCanvas(canvas).then((result) => {
+        navigate(`/?digits=${encodeURIComponent(result.getText())}`);
+      }).catch(() => {
+        setError('Could not read a barcode from this image. Try a clearer photo.');
+      }).finally(() => {
+        URL.revokeObjectURL(url);
+      });
+    };
+    img.src = url;
+    // Reset so same file can be re-selected
+    e.target.value = '';
+  }
+
   return (
     <div className="page scan-page">
       <h1>Scan Barcode</h1>
@@ -66,10 +92,26 @@ export default function ScanPage() {
         </div>
       )}
 
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handlePhotoUpload}
+        style={{ display: 'none' }}
+      />
+
+      <button
+        className="btn btn-secondary btn-full"
+        onClick={() => fileInputRef.current?.click()}
+        style={{ marginTop: '1rem' }}
+      >
+        Upload Photo
+      </button>
+
       <button
         className="btn btn-secondary btn-full"
         onClick={() => navigate('/')}
-        style={{ marginTop: '1rem' }}
+        style={{ marginTop: '0.75rem' }}
       >
         Or type digits manually
       </button>
