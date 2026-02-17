@@ -5,16 +5,19 @@ import storage from '../services/storage';
 export default function ListPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
+  const [gaps, setGaps] = useState([]);
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
 
   useEffect(() => {
     setItems(query ? storage.search(query) : storage.getAll());
+    if (!query) setGaps(storage.findSequenceGaps());
   }, [query]);
 
   function refresh() {
     setItems(query ? storage.search(query) : storage.getAll());
+    if (!query) setGaps(storage.findSequenceGaps());
   }
 
   function handleDelete(id) {
@@ -46,6 +49,25 @@ export default function ListPage() {
           className="search-input"
         />
       </div>
+
+      {gaps.length > 0 && !query && (
+        <div className="gaps-section">
+          <p className="gaps-title">Missing from sequences</p>
+          <ul className="gaps-list">
+            {gaps.map((gap) => (
+              <li key={gap.digits} className="gap-item">
+                <span className="gap-digits">{gap.digits}</span>
+                <button
+                  className="btn btn-small btn-primary"
+                  onClick={() => navigate(`/?digits=${encodeURIComponent(gap.digits)}&format=${encodeURIComponent(gap.format)}`)}
+                >
+                  Create
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {items.length === 0 ? (
         <div className="empty-state">

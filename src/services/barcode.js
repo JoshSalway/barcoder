@@ -98,6 +98,71 @@ export function resolveFormat(digits, format) {
 }
 
 /**
+ * Shift a barcode by `delta` steps in the numeric sequence.
+ * For EAN/UPC formats the payload (all digits except the check digit) is
+ * incremented and the check digit is recalculated automatically.
+ * For other purely-numeric formats the whole string is treated as the number.
+ * Returns null when the shift is not applicable or would overflow/underflow.
+ */
+function _shiftSequence(digits, format, delta) {
+  const resolved = resolveFormat(digits, format);
+
+  if (resolved === 'EAN13' && /^\d{13}$/.test(digits)) {
+    const next = BigInt(digits.slice(0, 12)) + delta;
+    if (next < 0n) return null;
+    const nextStr = next.toString().padStart(12, '0');
+    if (nextStr.length !== 12) return null;
+    const check = calcEAN13CheckDigit(nextStr);
+    return check !== null ? nextStr + check : null;
+  }
+
+  if (resolved === 'EAN8' && /^\d{8}$/.test(digits)) {
+    const next = BigInt(digits.slice(0, 7)) + delta;
+    if (next < 0n) return null;
+    const nextStr = next.toString().padStart(7, '0');
+    if (nextStr.length !== 7) return null;
+    const check = calcEAN8CheckDigit(nextStr);
+    return check !== null ? nextStr + check : null;
+  }
+
+  if (resolved === 'UPC' && /^\d{12}$/.test(digits)) {
+    const next = BigInt(digits.slice(0, 11)) + delta;
+    if (next < 0n) return null;
+    const nextStr = next.toString().padStart(11, '0');
+    if (nextStr.length !== 11) return null;
+    const check = calcUPCACheckDigit(nextStr);
+    return check !== null ? nextStr + check : null;
+  }
+
+  if (/^\d+$/.test(digits)) {
+    const next = BigInt(digits) + delta;
+    if (next < 0n) return null;
+    const nextStr = next.toString().padStart(digits.length, '0');
+    if (nextStr.length > digits.length) return null; // overflow
+    return nextStr;
+  }
+
+  return null;
+}
+
+/**
+ * Returns the next barcode in the numeric sequence.
+ * For EAN/UPC the check digit is recalculated automatically.
+ * Returns null if not applicable.
+ */
+export function nextInSequence(digits, format) {
+  return _shiftSequence(digits, format, 1n);
+}
+
+/**
+ * Returns the previous barcode in the numeric sequence.
+ * Returns null if not applicable or would go below zero.
+ */
+export function prevInSequence(digits, format) {
+  return _shiftSequence(digits, format, -1n);
+}
+
+/**
  * Normalize digits: auto-append check digits for EAN/UPC when the user
  * types one digit short.
  */

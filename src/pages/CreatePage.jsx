@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
-import { normalizeDigits, FORMATS, isQR } from '../services/barcode';
+import { normalizeDigits, FORMATS, isQR, nextInSequence, prevInSequence } from '../services/barcode';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -19,6 +19,12 @@ export default function CreatePage() {
     storage.save({ title: title.trim() || normalized, digits: normalized, format });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
+  }
+
+  function goToSequence(seqDigits) {
+    setDigits(seqDigits);
+    setTitle('');
+    setSaved(false);
   }
 
   function handleCopy() {
@@ -67,6 +73,34 @@ export default function CreatePage() {
           <BarcodeRenderer digits={digits} format={format} />
         </div>
       )}
+
+      {digits && !isQR(format) && (() => {
+        const norm = normalizeDigits(digits, format);
+        const seqPrev = /^\d+$/.test(norm) ? prevInSequence(norm, format) : null;
+        const seqNext = /^\d+$/.test(norm) ? nextInSequence(norm, format) : null;
+        if (!seqPrev && !seqNext) return null;
+        const savedSet = new Set(storage.getAll().map((i) => i.digits));
+        return (
+          <div className="seq-nav">
+            {seqPrev && (
+              <button
+                className={`btn btn-small seq-btn${savedSet.has(seqPrev) ? ' seq-saved' : ''}`}
+                onClick={() => goToSequence(seqPrev)}
+              >
+                ← {seqPrev}{savedSet.has(seqPrev) ? ' (saved)' : ''}
+              </button>
+            )}
+            {seqNext && (
+              <button
+                className={`btn btn-small seq-btn${savedSet.has(seqNext) ? ' seq-saved' : ' seq-missing'}`}
+                onClick={() => goToSequence(seqNext)}
+              >
+                {seqNext} →{savedSet.has(seqNext) ? ' (saved)' : ' (missing)'}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {digits && (
         <div className="action-row">

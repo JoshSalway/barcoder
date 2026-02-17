@@ -1,3 +1,5 @@
+import { nextInSequence } from './barcode.js';
+
 const STORAGE_KEY = 'barcode_items';
 
 function getAll() {
@@ -38,4 +40,58 @@ function search(query) {
   );
 }
 
-export default { getAll, save, remove, search };
+/**
+ * Finds barcodes that appear to be missing from numeric sequences in saved items.
+ *
+ * Groups saved barcodes by format + digit length (a proxy for "same series").
+ * Within each group, any number between the saved minimum and maximum that is
+ * absent is reported as a gap.  Groups whose range exceeds 500 are skipped to
+ * avoid producing enormous gap lists.
+ *
+ * Returns an array of { digits, format } objects for each missing barcode.
+ */
+function findSequenceGaps() {
+  const items = getAll().filter((i) => /^\d+$/.test(i.digits));
+  if (items.length < 2) return [];
+
+  // Group by format + digit length
+  const groups = new Map();
+  for (const item of items) {
+    const key = `${item.format}|${item.digits.length}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+
+  const gaps = [];
+
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+
+    // Sort numerically
+    group.sort((a, b) => (BigInt(a.digits) < BigInt(b.digits) ? -1 : 1));
+
+    const saved = new Set(group.map((i) => i.digits));
+    const maxVal = BigInt(group[group.length - 1].digits);
+    const minVal = BigInt(group[0].digits);
+
+    if (maxVal - minVal > 500n) continue; // skip unreasonably large ranges
+
+    // Walk forward from the minimum using nextInSequence; collect missing entries
+    let current = group[0].digits;
+    const format = group[0].format;
+
+    for (;;) {
+      const next = nextInSequence(current, format);
+      if (!next) break;
+      if (BigInt(next) > maxVal) break;
+      if (!saved.has(next)) {
+        gaps.push({ digits: next, format });
+      }
+      current = next;
+    }
+  }
+
+  return gaps;
+}
+
+export default { getAll, save, remove, search, findSequenceGaps };
