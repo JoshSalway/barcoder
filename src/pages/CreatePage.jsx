@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
-import { normalizeDigits } from '../services/barcode';
+import { normalizeDigits, FORMATS, isQR } from '../services/barcode';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -34,12 +34,12 @@ export default function CreatePage() {
       <h1>Create Barcode</h1>
 
       <div className="input-group">
-        <label htmlFor="digits-input">Digits</label>
+        <label htmlFor="digits-input">{isQR(format) ? 'Content' : 'Digits'}</label>
         <input
           id="digits-input"
           type="text"
-          inputMode="numeric"
-          placeholder="Enter barcode digits"
+          inputMode={isQR(format) ? 'text' : 'numeric'}
+          placeholder={isQR(format) ? 'Enter text or URL' : 'Enter barcode digits'}
           value={digits}
           onChange={(e) => {
             setDigits(e.target.value);
@@ -56,9 +56,9 @@ export default function CreatePage() {
           value={format}
           onChange={(e) => setFormat(e.target.value)}
         >
-          <option value="auto">Auto</option>
-          <option value="EAN13">EAN-13</option>
-          <option value="CODE128">Code 128</option>
+          {FORMATS.map((f) => (
+            <option key={f.value} value={f.value}>{f.label}</option>
+          ))}
         </select>
       </div>
 

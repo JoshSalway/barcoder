@@ -1,4 +1,50 @@
 /**
+ * All supported formats, grouped for the UI.
+ * `type` is either 'jsbarcode' or 'qrcode' to pick the right renderer.
+ */
+export const FORMATS = [
+  { value: 'auto',        label: 'Auto-detect',    type: 'jsbarcode' },
+  // 2D
+  { value: 'QR',          label: 'QR Code',         type: 'qrcode' },
+  // EAN / UPC family
+  { value: 'EAN13',       label: 'EAN-13',          type: 'jsbarcode' },
+  { value: 'EAN8',        label: 'EAN-8',           type: 'jsbarcode' },
+  { value: 'EAN5',        label: 'EAN-5',           type: 'jsbarcode' },
+  { value: 'EAN2',        label: 'EAN-2',           type: 'jsbarcode' },
+  { value: 'UPC',         label: 'UPC-A',           type: 'jsbarcode' },
+  { value: 'UPCE',        label: 'UPC-E',           type: 'jsbarcode' },
+  // Code family
+  { value: 'CODE128',     label: 'Code 128',        type: 'jsbarcode' },
+  { value: 'CODE128A',    label: 'Code 128 A',      type: 'jsbarcode' },
+  { value: 'CODE128B',    label: 'Code 128 B',      type: 'jsbarcode' },
+  { value: 'CODE128C',    label: 'Code 128 C',      type: 'jsbarcode' },
+  { value: 'CODE39',      label: 'Code 39',         type: 'jsbarcode' },
+  { value: 'CODE93',      label: 'Code 93',         type: 'jsbarcode' },
+  // ITF
+  { value: 'ITF14',       label: 'ITF-14',          type: 'jsbarcode' },
+  { value: 'ITF',         label: 'ITF (Interleaved 2 of 5)', type: 'jsbarcode' },
+  // MSI
+  { value: 'MSI',         label: 'MSI',             type: 'jsbarcode' },
+  { value: 'MSI10',       label: 'MSI Mod 10',      type: 'jsbarcode' },
+  { value: 'MSI11',       label: 'MSI Mod 11',      type: 'jsbarcode' },
+  { value: 'MSI1010',     label: 'MSI Mod 10/10',   type: 'jsbarcode' },
+  { value: 'MSI1110',     label: 'MSI Mod 11/10',   type: 'jsbarcode' },
+  // Others
+  { value: 'pharmacode',  label: 'Pharmacode',      type: 'jsbarcode' },
+  { value: 'codabar',     label: 'Codabar',         type: 'jsbarcode' },
+];
+
+/** Look up a format entry by value. */
+export function getFormat(value) {
+  return FORMATS.find((f) => f.value === value) || FORMATS[0];
+}
+
+/** Is this format a QR code? */
+export function isQR(format) {
+  return getFormat(format).type === 'qrcode';
+}
+
+/**
  * Calculate EAN-13 check digit from 12 digits.
  */
 export function calcEAN13CheckDigit(digits12) {
@@ -12,27 +58,64 @@ export function calcEAN13CheckDigit(digits12) {
 }
 
 /**
+ * Calculate EAN-8 check digit from 7 digits.
+ */
+export function calcEAN8CheckDigit(digits7) {
+  if (digits7.length !== 7 || !/^\d{7}$/.test(digits7)) return null;
+  let sum = 0;
+  for (let i = 0; i < 7; i++) {
+    sum += parseInt(digits7[i], 10) * (i % 2 === 0 ? 3 : 1);
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return check.toString();
+}
+
+/**
+ * Calculate UPC-A check digit from 11 digits.
+ */
+export function calcUPCACheckDigit(digits11) {
+  if (digits11.length !== 11 || !/^\d{11}$/.test(digits11)) return null;
+  let sum = 0;
+  for (let i = 0; i < 11; i++) {
+    sum += parseInt(digits11[i], 10) * (i % 2 === 0 ? 3 : 1);
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return check.toString();
+}
+
+/**
  * Determine the JsBarcode format string from our format enum.
  * If 'auto', pick based on digit length.
  */
 export function resolveFormat(digits, format) {
-  if (format === 'EAN13' || format === 'ean13') return 'EAN13';
-  if (format === 'CODE128' || format === 'code128') return 'CODE128';
+  if (format && format !== 'auto') return format;
 
-  // auto
+  // Auto-detect from content
   if (/^\d{13}$/.test(digits)) return 'EAN13';
-  if (/^\d{12}$/.test(digits)) return 'EAN13'; // will need check digit added
+  if (/^\d{12}$/.test(digits)) return 'UPC';
+  if (/^\d{8}$/.test(digits)) return 'EAN8';
   return 'CODE128';
 }
 
 /**
- * Normalize digits: if user typed 12 digits and format resolves to EAN-13,
- * auto-append check digit.
+ * Normalize digits: auto-append check digits for EAN/UPC when the user
+ * types one digit short.
  */
 export function normalizeDigits(digits, format) {
   const resolved = resolveFormat(digits, format);
+
+  // EAN-13: 12 digits → add check digit
   if (resolved === 'EAN13' && digits.length === 12 && /^\d{12}$/.test(digits)) {
     return digits + calcEAN13CheckDigit(digits);
   }
+  // EAN-8: 7 digits → add check digit
+  if (resolved === 'EAN8' && digits.length === 7 && /^\d{7}$/.test(digits)) {
+    return digits + calcEAN8CheckDigit(digits);
+  }
+  // UPC-A: 11 digits → add check digit
+  if (resolved === 'UPC' && digits.length === 11 && /^\d{11}$/.test(digits)) {
+    return digits + calcUPCACheckDigit(digits);
+  }
+
   return digits;
 }

@@ -1,14 +1,18 @@
 import { useEffect, useRef } from 'react';
 import JsBarcode from 'jsbarcode';
-import { resolveFormat, normalizeDigits } from '../services/barcode';
+import QRCode from 'qrcode';
+import { resolveFormat, normalizeDigits, isQR } from '../services/barcode';
 
 export default function BarcodeRenderer({ digits, format = 'auto', large = false }) {
   const svgRef = useRef(null);
+  const canvasRef = useRef(null);
+  const qr = isQR(format);
   const normalized = normalizeDigits(digits, format);
   const resolvedFormat = resolveFormat(normalized, format);
 
+  // 1D barcode via JsBarcode
   useEffect(() => {
-    if (!svgRef.current || !normalized) return;
+    if (qr || !svgRef.current || !normalized) return;
     try {
       JsBarcode(svgRef.current, normalized, {
         format: resolvedFormat,
@@ -20,18 +24,32 @@ export default function BarcodeRenderer({ digits, format = 'auto', large = false
         lineColor: '#000000',
       });
     } catch {
-      // Invalid barcode data - clear the SVG
-      if (svgRef.current) {
-        svgRef.current.innerHTML = '';
-      }
+      if (svgRef.current) svgRef.current.innerHTML = '';
     }
-  }, [normalized, resolvedFormat, large]);
+  }, [normalized, resolvedFormat, large, qr]);
+
+  // QR code via qrcode library
+  useEffect(() => {
+    if (!qr || !canvasRef.current || !normalized) return;
+    QRCode.toCanvas(canvasRef.current, normalized, {
+      width: large ? 280 : 200,
+      margin: 1,
+      color: { dark: '#000000', light: '#ffffff' },
+    }).catch(() => {
+      const ctx = canvasRef.current?.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    });
+  }, [normalized, large, qr]);
 
   if (!digits) return null;
 
   return (
     <div className={`barcode-render ${large ? 'barcode-large' : ''}`}>
-      <svg ref={svgRef} />
+      {qr ? (
+        <canvas ref={canvasRef} style={{ maxWidth: '100%', height: 'auto' }} />
+      ) : (
+        <svg ref={svgRef} />
+      )}
       <div className={`barcode-digits ${large ? 'digits-large' : ''}`}>
         {normalized}
       </div>
