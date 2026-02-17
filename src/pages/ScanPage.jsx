@@ -3,6 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 
+// Map @zxing BarcodeFormat enum to our format values
+const ZXING_TO_FORMAT = {
+  [BarcodeFormat.QR_CODE]: 'QR',
+  [BarcodeFormat.EAN_13]: 'EAN13',
+  [BarcodeFormat.EAN_8]: 'EAN8',
+  [BarcodeFormat.UPC_A]: 'UPC',
+  [BarcodeFormat.UPC_E]: 'UPCE',
+  [BarcodeFormat.CODE_128]: 'CODE128',
+  [BarcodeFormat.CODE_39]: 'CODE39',
+  [BarcodeFormat.CODE_93]: 'CODE93',
+  [BarcodeFormat.ITF]: 'ITF',
+  [BarcodeFormat.CODABAR]: 'codabar',
+  [BarcodeFormat.DATA_MATRIX]: 'QR',  // closest we support
+  [BarcodeFormat.AZTEC]: 'QR',
+  [BarcodeFormat.PDF_417]: 'CODE128',
+  [BarcodeFormat.RSS_14]: 'EAN13',
+  [BarcodeFormat.RSS_EXPANDED]: 'CODE128',
+};
+
+function buildResultUrl(result) {
+  const digits = encodeURIComponent(result.getText());
+  const format = ZXING_TO_FORMAT[result.getBarcodeFormat()] || 'auto';
+  return `/?digits=${digits}&format=${format}`;
+}
+
 export default function ScanPage() {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -28,9 +53,8 @@ export default function ScanPage() {
 
     reader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
       if (result) {
-        const text = result.getText();
         stopScanning();
-        navigate(`/?digits=${encodeURIComponent(text)}`);
+        navigate(buildResultUrl(result));
       }
       // Ignore not-found errors (they fire continuously while scanning)
       if (err && err.name !== 'NotFoundException') {
@@ -102,7 +126,7 @@ export default function ScanPage() {
         }
 
         if (found) {
-          navigate(`/?digits=${encodeURIComponent(found.getText())}`);
+          navigate(buildResultUrl(found));
         } else {
           setError('Could not find a barcode in this image. Try cropping closer to the barcode.');
         }
