@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
 import BottomNav from '../components/BottomNav';
 import { getStatus, FORMATS, isQR, nextInSequence, prevInSequence } from '../services/barcode';
-import { lookupBarcode, getWoolworthsSearchUrl } from '../services/productLookup';
+import { lookupBarcode, lookupFromWoolworthsUrl, getWoolworthsSearchUrl } from '../services/productLookup';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -29,7 +29,6 @@ export default function CreatePage() {
       return;
     }
 
-    // Debounce lookups
     const normalizedDigits = bs.normalized;
     if (lookupRef.current === normalizedDigits) return;
 
@@ -37,7 +36,6 @@ export default function CreatePage() {
       lookupRef.current = normalizedDigits;
       setLookingUp(true);
       const result = await lookupBarcode(normalizedDigits);
-      // Only update if digits haven't changed during fetch
       if (lookupRef.current === normalizedDigits) {
         setProduct(result);
         if (result?.productName && !title) {
@@ -52,6 +50,23 @@ export default function CreatePage() {
 
     return () => clearTimeout(timeout);
   }, [bs.normalized, qr]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle Woolworths URL paste — extract barcode from product page
+  async function handleUrlChange(newUrl) {
+    setUrl(newUrl);
+    if (newUrl.includes('woolworths.com.au/shop/productdetails/')) {
+      setLookingUp(true);
+      const result = await lookupFromWoolworthsUrl(newUrl);
+      if (result) {
+        setProduct(result);
+        if (result.productName && !title) setTitle(result.productName);
+        if (result.barcode && !digits) {
+          setDigits(result.barcode);
+        }
+      }
+      setLookingUp(false);
+    }
+  }
 
   function handleSave() {
     if (!bs.normalized) return;
@@ -139,6 +154,12 @@ export default function CreatePage() {
           <div className="product-details">
             {product.productName && <span className="product-name">{product.productName}</span>}
             {product.brand && <span className="product-brand">{product.brand}</span>}
+            {product.packageSize && <span className="product-meta">{product.packageSize}</span>}
+            {product.price != null && (
+              <span className={`product-price${product.isOnSpecial ? ' on-special' : ''}`}>
+                ${product.price.toFixed(2)}{product.isOnSpecial ? ' (On Special)' : ''}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -202,13 +223,13 @@ export default function CreatePage() {
           />
         </div>
         <div className="input-group">
-          <label htmlFor="url-input">Product URL (optional)</label>
+          <label htmlFor="url-input">Product URL (optional — paste Woolworths link to auto-fill)</label>
           <input
             id="url-input"
             type="url"
-            placeholder="https://..."
+            placeholder="https://woolworths.com.au/shop/productdetails/..."
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => handleUrlChange(e.target.value)}
           />
         </div>
         <button
