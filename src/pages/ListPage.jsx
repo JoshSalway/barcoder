@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import BottomNav from '../components/BottomNav';
 import storage from '../services/storage';
 
 export default function ListPage() {
@@ -102,7 +103,7 @@ export default function ListPage() {
                     onClick={() => navigate(`/display/${item.id}`)}
                   >
                     <span className="item-title">{item.title}</span>
-                    <span className="item-digits">{item.digits}</span>
+                    <span className="item-digits">{item.digits}{item.brand ? ` · ${item.brand}` : ''}</span>
                   </div>
                   <div className="item-actions">
                     <button className="btn btn-small btn-secondary" onClick={() => startEdit(item)}>
@@ -119,11 +120,7 @@ export default function ListPage() {
         </ul>
       )}
 
-      <nav className="bottom-nav">
-        <button className="nav-btn" onClick={() => navigate('/')}>Create</button>
-        <button className="nav-btn" onClick={() => navigate('/scan')}>Scan</button>
-        <button className="nav-btn active" onClick={() => navigate('/list')}>Saved</button>
-      </nav>
+      <BottomNav />
     </div>
   );
 }

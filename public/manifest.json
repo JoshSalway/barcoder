@@ -1,7 +1,7 @@
 {
   "name": "Barcode",
   "short_name": "Barcode",
-  "start_url": "/",
+  "start_url": "/scan",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#000000",

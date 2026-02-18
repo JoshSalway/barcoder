@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
+import BottomNav from '../components/BottomNav';
 import { getStatus, FORMATS, isQR, nextInSequence, prevInSequence } from '../services/barcode';
+import { lookupBarcode, getWoolworthsSearchUrl } from '../services/productLookup';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -10,15 +12,58 @@ export default function CreatePage() {
   const [digits, setDigits] = useState(searchParams.get('digits') || '');
   const [format, setFormat] = useState(searchParams.get('format') || 'auto');
   const [title, setTitle] = useState('');
+  const [url, setUrl] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [product, setProduct] = useState(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const lookupRef = useRef(null);
 
-  const bs = getStatus(digits, format); // { normalized, resolvedFormat, status, error }
+  const bs = getStatus(digits, format);
   const qr = isQR(format);
+
+  // Auto-lookup product when we have a valid normalized barcode
+  useEffect(() => {
+    if (!bs.normalized || qr) {
+      setProduct(null);
+      return;
+    }
+
+    // Debounce lookups
+    const normalizedDigits = bs.normalized;
+    if (lookupRef.current === normalizedDigits) return;
+
+    const timeout = setTimeout(async () => {
+      lookupRef.current = normalizedDigits;
+      setLookingUp(true);
+      const result = await lookupBarcode(normalizedDigits);
+      // Only update if digits haven't changed during fetch
+      if (lookupRef.current === normalizedDigits) {
+        setProduct(result);
+        if (result?.productName && !title) {
+          setTitle(result.productName);
+        }
+        if (result?.url && !url) {
+          setUrl(result.url);
+        }
+        setLookingUp(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [bs.normalized, qr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleSave() {
     if (!bs.normalized) return;
-    storage.save({ title: title.trim() || bs.normalized, digits: bs.normalized, format: bs.resolvedFormat || format });
+    storage.save({
+      title: title.trim() || bs.normalized,
+      digits: bs.normalized,
+      format: bs.resolvedFormat || format,
+      url: url.trim() || null,
+      productName: product?.productName || null,
+      brand: product?.brand || null,
+      imageUrl: product?.imageUrl || null,
+    });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }
@@ -26,7 +71,10 @@ export default function CreatePage() {
   function goToSequence(seqDigits) {
     setDigits(seqDigits);
     setTitle('');
+    setUrl('');
+    setProduct(null);
     setSaved(false);
+    lookupRef.current = null;
   }
 
   function handleCopy() {
@@ -83,6 +131,20 @@ export default function CreatePage() {
         </div>
       )}
 
+      {bs.normalized && !qr && product && (
+        <div className="product-info">
+          {product.imageUrl && (
+            <img src={product.imageUrl} alt={product.productName || ''} className="product-image" />
+          )}
+          <div className="product-details">
+            {product.productName && <span className="product-name">{product.productName}</span>}
+            {product.brand && <span className="product-brand">{product.brand}</span>}
+          </div>
+        </div>
+      )}
+
+      {lookingUp && <p className="lookup-status">Looking up product...</p>}
+
       {bs.normalized && !qr && (() => {
         const seqPrev = /^\d+$/.test(bs.normalized) ? prevInSequence(bs.normalized, bs.resolvedFormat || format) : null;
         const seqNext = /^\d+$/.test(bs.normalized) ? nextInSequence(bs.normalized, bs.resolvedFormat || format) : null;
@@ -115,6 +177,16 @@ export default function CreatePage() {
           <button className="btn btn-secondary" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy Digits'}
           </button>
+          {bs.normalized && !qr && (
+            <a
+              className="btn btn-secondary"
+              href={getWoolworthsSearchUrl(bs.normalized)}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Woolworths
+            </a>
+          )}
         </div>
       )}
 
@@ -129,6 +201,16 @@ export default function CreatePage() {
             onChange={(e) => setTitle(e.target.value)}
           />
         </div>
+        <div className="input-group">
+          <label htmlFor="url-input">Product URL (optional)</label>
+          <input
+            id="url-input"
+            type="url"
+            placeholder="https://..."
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+          />
+        </div>
         <button
           className="btn btn-primary btn-full"
           onClick={handleSave}
@@ -138,11 +220,7 @@ export default function CreatePage() {
         </button>
       </div>
 
-      <nav className="bottom-nav">
-        <button className="nav-btn active" onClick={() => navigate('/')}>Create</button>
-        <button className="nav-btn" onClick={() => navigate('/scan')}>Scan</button>
-        <button className="nav-btn" onClick={() => navigate('/list')}>Saved</button>
-      </nav>
+      <BottomNav />
     </div>
   );
 }

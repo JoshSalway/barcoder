@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { BrowserMultiFormatReader } from '@zxing/browser';
 import { DecodeHintType, BarcodeFormat } from '@zxing/library';
+import BottomNav from '../components/BottomNav';
+import { preprocessForBarcode } from '../services/imagePreprocess';
 
 // Map @zxing BarcodeFormat enum to our format values
 const ZXING_TO_FORMAT = {
@@ -22,6 +24,21 @@ const ZXING_TO_FORMAT = {
   [BarcodeFormat.RSS_EXPANDED]: 'CODE128',
 };
 
+const SCAN_HINTS = (() => {
+  const hints = new Map();
+  hints.set(DecodeHintType.TRY_HARDER, true);
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+    BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+    BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+    BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+    BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
+    BarcodeFormat.ITF, BarcodeFormat.CODABAR,
+    BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED,
+    BarcodeFormat.AZTEC, BarcodeFormat.PDF_417,
+  ]);
+  return hints;
+})();
+
 function buildResultUrl(result) {
   const digits = encodeURIComponent(result.getText());
   const format = ZXING_TO_FORMAT[result.getBarcodeFormat()] || 'auto';
@@ -32,10 +49,10 @@ export default function ScanPage() {
   const navigate = useNavigate();
   const videoRef = useRef(null);
   const fileInputRef = useRef(null);
-  const readerRef = useRef(null);
   const controlsRef = useRef(null);
   const [error, setError] = useState(null);
   const [scanning, setScanning] = useState(true);
+  const [processing, setProcessing] = useState(false);
 
   const stopScanning = useCallback(() => {
     if (controlsRef.current) {
@@ -49,20 +66,18 @@ export default function ScanPage() {
     if (!scanning) return;
 
     const reader = new BrowserMultiFormatReader();
-    readerRef.current = reader;
 
     reader.decodeFromVideoDevice(undefined, videoRef.current, (result, err) => {
       if (result) {
         stopScanning();
         navigate(buildResultUrl(result));
       }
-      // Ignore not-found errors (they fire continuously while scanning)
       if (err && err.name !== 'NotFoundException') {
-        // Only set error for real failures
+        // Real camera errors handled by catch below
       }
     }).then((controls) => {
       controlsRef.current = controls;
-    }).catch((e) => {
+    }).catch(() => {
       setError('Camera access denied or not available. Please allow camera access and try again.');
     });
 
@@ -75,54 +90,44 @@ export default function ScanPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setProcessing(true);
+    setError(null);
+
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = async () => {
       try {
-        // Set up hints for aggressive scanning
-        const hints = new Map();
-        hints.set(DecodeHintType.TRY_HARDER, true);
-        hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-          BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
-          BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
-          BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
-          BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.CODE_93,
-          BarcodeFormat.ITF, BarcodeFormat.CODABAR,
-          BarcodeFormat.RSS_14, BarcodeFormat.RSS_EXPANDED,
-          BarcodeFormat.AZTEC, BarcodeFormat.PDF_417,
-        ]);
-
         const w = img.naturalWidth;
         const h = img.naturalHeight;
 
-        // Try at multiple scales/crops to find the barcode in a busy image
-        const attempts = [
-          // Full image
+        // Region crops to try
+        const regions = [
           { sx: 0, sy: 0, sw: w, sh: h },
-          // Center crop (middle 60%)
           { sx: w * 0.2, sy: h * 0.2, sw: w * 0.6, sh: h * 0.6 },
-          // Bottom half (barcodes often at bottom of products)
           { sx: 0, sy: h * 0.4, sw: w, sh: h * 0.6 },
-          // Top half
           { sx: 0, sy: 0, sw: w, sh: h * 0.6 },
-          // Middle horizontal strip
           { sx: 0, sy: h * 0.25, sw: w, sh: h * 0.5 },
         ];
 
         let found = null;
-        for (const { sx, sy, sw, sh } of attempts) {
+        for (const { sx, sy, sw, sh } of regions) {
           const canvas = document.createElement('canvas');
           canvas.width = sw;
           canvas.height = sh;
           canvas.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
-          const reader = new BrowserMultiFormatReader(hints);
-          try {
-            found = await reader.decodeFromCanvas(canvas);
-            if (found) break;
-          } catch {
-            // Try next region
+          // Try original and preprocessed variants
+          const variants = preprocessForBarcode(canvas);
+          for (const variant of variants) {
+            const reader = new BrowserMultiFormatReader(SCAN_HINTS);
+            try {
+              found = await reader.decodeFromCanvas(variant);
+              if (found) break;
+            } catch {
+              // Try next variant
+            }
           }
+          if (found) break;
         }
 
         if (found) {
@@ -132,10 +137,15 @@ export default function ScanPage() {
         }
       } finally {
         URL.revokeObjectURL(url);
+        setProcessing(false);
       }
     };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      setProcessing(false);
+      setError('Could not load the image. Please try a different photo.');
+    };
     img.src = url;
-    // Reset so same file can be re-selected
     e.target.value = '';
   }
 
@@ -171,9 +181,10 @@ export default function ScanPage() {
       <button
         className="btn btn-secondary btn-full"
         onClick={() => fileInputRef.current?.click()}
+        disabled={processing}
         style={{ marginTop: '1rem' }}
       >
-        Upload Photo
+        {processing ? 'Analyzing photo...' : 'Upload Photo'}
       </button>
 
       <button
@@ -184,11 +195,7 @@ export default function ScanPage() {
         Or type digits manually
       </button>
 
-      <nav className="bottom-nav">
-        <button className="nav-btn" onClick={() => navigate('/')}>Create</button>
-        <button className="nav-btn active" onClick={() => navigate('/scan')}>Scan</button>
-        <button className="nav-btn" onClick={() => navigate('/list')}>Saved</button>
-      </nav>
+      <BottomNav />
     </div>
   );
 }
