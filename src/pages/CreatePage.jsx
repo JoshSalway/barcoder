@@ -2,8 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
 import BottomNav from '../components/BottomNav';
-import { getStatus, FORMATS, isQR, nextInSequence, prevInSequence } from '../services/barcode';
-import { lookupBarcode, lookupFromWoolworthsUrl, getWoolworthsSearchUrl } from '../services/productLookup';
+import { getStatus, FORMATS, isQR } from '../services/barcode';
+import { lookupBarcode, getWoolworthsSearchUrl } from '../services/productLookup';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -12,7 +12,6 @@ export default function CreatePage() {
   const [digits, setDigits] = useState(searchParams.get('digits') || '');
   const [format, setFormat] = useState(searchParams.get('format') || 'auto');
   const [title, setTitle] = useState('');
-  const [url, setUrl] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [product, setProduct] = useState(null);
@@ -21,6 +20,15 @@ export default function CreatePage() {
 
   const bs = getStatus(digits, format);
   const qr = isQR(format);
+
+  // Auto-switch dropdown to detected format when in auto mode
+  // Only switch for specifically detected formats (not the CODE128 catch-all)
+  const DETECTED_FORMATS = new Set(['EAN13', 'EAN8', 'UPC', 'ITF14']);
+  useEffect(() => {
+    if (format === 'auto' && bs.resolvedFormat && bs.normalized && DETECTED_FORMATS.has(bs.resolvedFormat)) {
+      setFormat(bs.resolvedFormat);
+    }
+  }, [bs.resolvedFormat, bs.normalized, format]);
 
   // Auto-lookup product when we have a valid normalized barcode
   useEffect(() => {
@@ -41,9 +49,6 @@ export default function CreatePage() {
         if (result?.productName && !title) {
           setTitle(result.productName);
         }
-        if (result?.url && !url) {
-          setUrl(result.url);
-        }
         setLookingUp(false);
       }
     }, 500);
@@ -51,45 +56,19 @@ export default function CreatePage() {
     return () => clearTimeout(timeout);
   }, [bs.normalized, qr]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Handle Woolworths URL paste — extract barcode from product page
-  async function handleUrlChange(newUrl) {
-    setUrl(newUrl);
-    if (newUrl.includes('woolworths.com.au/shop/productdetails/')) {
-      setLookingUp(true);
-      const result = await lookupFromWoolworthsUrl(newUrl);
-      if (result) {
-        setProduct(result);
-        if (result.productName && !title) setTitle(result.productName);
-        if (result.barcode && !digits) {
-          setDigits(result.barcode);
-        }
-      }
-      setLookingUp(false);
-    }
-  }
-
   function handleSave() {
     if (!bs.normalized) return;
     storage.save({
       title: title.trim() || bs.normalized,
       digits: bs.normalized,
       format: bs.resolvedFormat || format,
-      url: url.trim() || null,
+      url: product?.url || product?.woolworthsUrl || null,
       productName: product?.productName || null,
       brand: product?.brand || null,
       imageUrl: product?.imageUrl || null,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
-  }
-
-  function goToSequence(seqDigits) {
-    setDigits(seqDigits);
-    setTitle('');
-    setUrl('');
-    setProduct(null);
-    setSaved(false);
-    lookupRef.current = null;
   }
 
   function handleCopy() {
@@ -166,33 +145,6 @@ export default function CreatePage() {
 
       {lookingUp && <p className="lookup-status">Looking up product...</p>}
 
-      {bs.normalized && !qr && (() => {
-        const seqPrev = /^\d+$/.test(bs.normalized) ? prevInSequence(bs.normalized, bs.resolvedFormat || format) : null;
-        const seqNext = /^\d+$/.test(bs.normalized) ? nextInSequence(bs.normalized, bs.resolvedFormat || format) : null;
-        if (!seqPrev && !seqNext) return null;
-        const savedSet = new Set(storage.getAll().map((i) => i.digits));
-        return (
-          <div className="seq-nav">
-            {seqPrev && (
-              <button
-                className={`btn btn-small seq-btn${savedSet.has(seqPrev) ? ' seq-saved' : ''}`}
-                onClick={() => goToSequence(seqPrev)}
-              >
-                ← {seqPrev}{savedSet.has(seqPrev) ? ' (saved)' : ''}
-              </button>
-            )}
-            {seqNext && (
-              <button
-                className={`btn btn-small seq-btn${savedSet.has(seqNext) ? ' seq-saved' : ' seq-missing'}`}
-                onClick={() => goToSequence(seqNext)}
-              >
-                {seqNext} →{savedSet.has(seqNext) ? ' (saved)' : ' (missing)'}
-              </button>
-            )}
-          </div>
-        );
-      })()}
-
       {bs.normalized && (
         <div className="action-row">
           <button className="btn btn-secondary" onClick={handleCopy}>
@@ -220,16 +172,6 @@ export default function CreatePage() {
             placeholder="e.g. Loyalty Card"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-          />
-        </div>
-        <div className="input-group">
-          <label htmlFor="url-input">Product URL (optional — paste Woolworths link to auto-fill)</label>
-          <input
-            id="url-input"
-            type="url"
-            placeholder="https://woolworths.com.au/shop/productdetails/..."
-            value={url}
-            onChange={(e) => handleUrlChange(e.target.value)}
           />
         </div>
         <button

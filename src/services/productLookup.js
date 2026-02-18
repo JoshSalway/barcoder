@@ -2,16 +2,12 @@
  * Product lookup service.
  *
  * Data sources (tried in order):
- * 1. Woolworths Search API — search by barcode, returns product name/image/stockcode
- * 2. Woolworths Product Detail API — rich data by stockcode (used when URL pasted)
- * 3. Open Food Facts — free global barcode database (fallback)
- *
- * Woolworths product pages also publish JSON-LD structured data with gtin/name/brand/price,
- * which we parse when a user pastes a Woolworths product URL.
+ * 1. Woolworths Search API — search by barcode, returns product name/image/price
+ *    Note: CORS-blocked on localhost but may work when deployed on same domain or via proxy
+ * 2. Open Food Facts — free global barcode database (fallback)
  */
 
 const WOOLWORTHS_SEARCH_API = 'https://www.woolworths.com.au/apis/ui/Search/products';
-const WOOLWORTHS_DETAIL_API = 'https://www.woolworths.com.au/apis/ui/product/detail';
 const WOOLWORTHS_SEARCH_URL = 'https://www.woolworths.com.au/shop/search/products?searchTerm=';
 const OPENFOODFACTS_API = 'https://world.openfoodfacts.org/api/v2/product';
 
@@ -50,41 +46,10 @@ async function lookupWoolworths(digits) {
       price: p.Price || null,
       isOnSpecial: p.IsOnSpecial || false,
       packageSize: p.PackageSize || null,
-      woolworthsUrl: stockcode
+      url: stockcode
         ? `https://www.woolworths.com.au/shop/productdetails/${stockcode}`
         : null,
-      stockcode: stockcode || null,
       source: 'woolworths',
-    };
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Look up a Woolworths product by stockcode (parsed from a product URL).
- * Returns rich product data or null.
- */
-async function lookupWoolworthsByStockcode(stockcode) {
-  try {
-    const res = await fetch(`${WOOLWORTHS_DETAIL_API}/${stockcode}`);
-    if (!res.ok) return null;
-
-    const p = await res.json();
-    if (!p?.Product) return null;
-
-    const prod = p.Product;
-    return {
-      productName: prod.Name || null,
-      brand: prod.Brand || null,
-      imageUrl: prod.MediumImageFile || prod.SmallImageFile || null,
-      barcode: prod.Barcode || null,
-      price: prod.Price || null,
-      isOnSpecial: prod.IsOnSpecial || false,
-      packageSize: prod.PackageSize || null,
-      woolworthsUrl: `https://www.woolworths.com.au/shop/productdetails/${stockcode}`,
-      stockcode: String(stockcode),
-      source: 'woolworths-detail',
     };
   } catch {
     return null;
@@ -123,31 +88,15 @@ async function lookupOpenFoodFacts(digits) {
 export async function lookupBarcode(digits) {
   if (!digits || digits.length < 8) return null;
 
-  // Try Woolworths first (primary use case)
+  // Try Woolworths first (CORS-blocked on localhost, works on deployed domain)
   const woolworths = await lookupWoolworths(digits);
-  if (woolworths) {
-    return {
-      ...woolworths,
-      url: woolworths.woolworthsUrl,
-    };
-  }
+  if (woolworths) return woolworths;
 
   // Fallback to Open Food Facts
   const off = await lookupOpenFoodFacts(digits);
   if (off) return off;
 
   return null;
-}
-
-/**
- * Parse a Woolworths product URL and look up the product by stockcode.
- * Supports URLs like: woolworths.com.au/shop/productdetails/123456
- * Returns product info with barcode, or null.
- */
-export async function lookupFromWoolworthsUrl(url) {
-  const match = url.match(/productdetails\/(\d+)/);
-  if (!match) return null;
-  return lookupWoolworthsByStockcode(match[1]);
 }
 
 /**
