@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
 import BottomNav from '../components/BottomNav';
 import { getStatus, FORMATS, isQR } from '../services/barcode';
-import { lookupBarcode, getWoolworthsSearchUrl } from '../services/productLookup';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -14,9 +13,6 @@ export default function CreatePage() {
   const [title, setTitle] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [product, setProduct] = useState(null);
-  const [lookingUp, setLookingUp] = useState(false);
-  const lookupRef = useRef(null);
 
   const bs = getStatus(digits, format);
   const qr = isQR(format);
@@ -30,42 +26,12 @@ export default function CreatePage() {
     }
   }, [bs.resolvedFormat, bs.normalized, format]);
 
-  // Auto-lookup product when we have a valid normalized barcode
-  useEffect(() => {
-    if (!bs.normalized || qr) {
-      setProduct(null);
-      return;
-    }
-
-    const normalizedDigits = bs.normalized;
-    if (lookupRef.current === normalizedDigits) return;
-
-    const timeout = setTimeout(async () => {
-      lookupRef.current = normalizedDigits;
-      setLookingUp(true);
-      const result = await lookupBarcode(normalizedDigits);
-      if (lookupRef.current === normalizedDigits) {
-        setProduct(result);
-        if (result?.productName && !title) {
-          setTitle(result.productName);
-        }
-        setLookingUp(false);
-      }
-    }, 500);
-
-    return () => clearTimeout(timeout);
-  }, [bs.normalized, qr]); // eslint-disable-line react-hooks/exhaustive-deps
-
   function handleSave() {
     if (!bs.normalized) return;
     storage.save({
       title: title.trim() || bs.normalized,
       digits: bs.normalized,
       format: bs.resolvedFormat || format,
-      url: product?.url || product?.woolworthsUrl || null,
-      productName: product?.productName || null,
-      brand: product?.brand || null,
-      imageUrl: product?.imageUrl || null,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -126,41 +92,11 @@ export default function CreatePage() {
         </div>
       )}
 
-      {bs.normalized && !qr && product && (
-        <div className="product-info">
-          {product.imageUrl && (
-            <img src={product.imageUrl} alt={product.productName || ''} className="product-image" />
-          )}
-          <div className="product-details">
-            {product.productName && <span className="product-name">{product.productName}</span>}
-            {product.brand && <span className="product-brand">{product.brand}</span>}
-            {product.packageSize && <span className="product-meta">{product.packageSize}</span>}
-            {product.price != null && (
-              <span className={`product-price${product.isOnSpecial ? ' on-special' : ''}`}>
-                ${product.price.toFixed(2)}{product.isOnSpecial ? ' (On Special)' : ''}
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {lookingUp && <p className="lookup-status">Looking up product...</p>}
-
       {bs.normalized && (
         <div className="action-row">
           <button className="btn btn-secondary" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy Digits'}
           </button>
-          {bs.normalized && !qr && (
-            <a
-              className="btn btn-secondary"
-              href={getWoolworthsSearchUrl(bs.normalized)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Woolworths
-            </a>
-          )}
         </div>
       )}
 
