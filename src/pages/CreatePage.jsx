@@ -93,6 +93,7 @@ export default function CreatePage() {
           value={digits}
           onChange={(e) => {
             setDigits(e.target.value);
+            setFormat('auto');
             setSaved(false);
           }}
           autoFocus
