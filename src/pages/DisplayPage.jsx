@@ -41,6 +41,8 @@ export default function DisplayPage() {
       <h2 className="display-title">{item.title}</h2>
       <span className="display-format">{formatInfo.label}</span>
 
+      {item.brand && <span className="display-brand">{item.brand}</span>}
+
       {(item.storeName || item.aisle || item.productId) && (
         <div className="display-info">
           {item.productId && (
@@ -71,6 +73,18 @@ export default function DisplayPage() {
       <button className="btn btn-secondary btn-full" onClick={handleCopy}>
         {copied ? 'Copied!' : 'Copy Digits'}
       </button>
+
+      {item.productUrl && (
+        <a
+          className="btn btn-secondary btn-full"
+          href={item.productUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ marginTop: '0.5rem' }}
+        >
+          View Product
+        </a>
+      )}
     </div>
   );
 }

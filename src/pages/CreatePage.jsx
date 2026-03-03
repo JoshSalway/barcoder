@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
 import BottomNav from '../components/BottomNav';
 import { getStatus, FORMATS, isQR } from '../services/barcode';
+import { lookupBarcode } from '../services/productLookup';
 import storage from '../services/storage';
 
 export default function CreatePage() {
@@ -19,6 +20,9 @@ export default function CreatePage() {
   const [selectedStore, setSelectedStore] = useState(storage.getActiveStore());
   const [newStoreName, setNewStoreName] = useState('');
   const [showAddStore, setShowAddStore] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+  const [product, setProduct] = useState(null);
+  const lookupRef = useRef(null);
 
   const bs = getStatus(digits, format);
   const qr = isQR(format);
@@ -31,6 +35,34 @@ export default function CreatePage() {
       setFormat(bs.resolvedFormat);
     }
   }, [bs.resolvedFormat, bs.normalized, format]);
+
+  // Auto-lookup product when we have a valid barcode
+  useEffect(() => {
+    if (!bs.normalized || qr) {
+      setProduct(null);
+      return;
+    }
+
+    const normalizedDigits = bs.normalized;
+    if (lookupRef.current === normalizedDigits) return;
+
+    const timeout = setTimeout(async () => {
+      lookupRef.current = normalizedDigits;
+      setLookingUp(true);
+      const result = await lookupBarcode(normalizedDigits);
+      if (lookupRef.current === normalizedDigits) {
+        setProduct(result);
+        if (result) {
+          if (result.productName && !title) setTitle(result.productName);
+          if (result.productId && !productId) setProductId(result.productId);
+          if (result.category && !aisle) setAisle(result.category);
+        }
+        setLookingUp(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [bs.normalized, qr]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleAddStore() {
     if (!newStoreName.trim()) return;
@@ -67,6 +99,10 @@ export default function CreatePage() {
       aisle: aisle.trim(),
       storeId: selectedStore,
       storeName,
+      brand: product?.brand || null,
+      imageUrl: product?.imageUrl || null,
+      productUrl: product?.url || null,
+      dataSource: product?.source || null,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -124,6 +160,27 @@ export default function CreatePage() {
       {bs.normalized && (
         <div className="barcode-preview">
           <BarcodeRenderer digits={bs.normalized} format={bs.resolvedFormat || format} />
+        </div>
+      )}
+
+      {lookingUp && <p className="lookup-status">Looking up product...</p>}
+
+      {bs.normalized && !qr && product && (
+        <div className="product-info">
+          {product.imageUrl && (
+            <img src={product.imageUrl} alt={product.productName || ''} className="product-image" />
+          )}
+          <div className="product-details">
+            {product.productName && <span className="product-name">{product.productName}</span>}
+            {product.brand && <span className="product-brand">{product.brand}</span>}
+            {product.category && <span className="product-category">{product.category}</span>}
+            {product.price != null && (
+              <span className={`product-price${product.isOnSpecial ? ' on-special' : ''}`}>
+                ${product.price.toFixed(2)}{product.isOnSpecial ? ' (On Special)' : ''}
+              </span>
+            )}
+            <span className="product-source">via {product.source === 'woolworths' ? 'Woolworths' : 'Open Food Facts'}</span>
+          </div>
         </div>
       )}
 
