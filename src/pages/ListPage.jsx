@@ -103,7 +103,17 @@ export default function ListPage() {
                     onClick={() => navigate(`/display/${item.id}`)}
                   >
                     <span className="item-title">{item.title}</span>
-                    <span className="item-digits">{item.digits}{item.brand ? ` · ${item.brand}` : ''}</span>
+                    <span className="item-digits">
+                      {item.digits}
+                      {item.productId ? ` · ${item.productId}` : ''}
+                    </span>
+                    {(item.storeName || item.aisle) && (
+                      <span className="item-meta">
+                        {item.storeName || ''}
+                        {item.storeName && item.aisle ? ' · ' : ''}
+                        {item.aisle ? `Aisle ${item.aisle}` : ''}
+                      </span>
+                    )}
                   </div>
                   <div className="item-actions">
                     <button className="btn btn-small btn-secondary" onClick={() => startEdit(item)}>

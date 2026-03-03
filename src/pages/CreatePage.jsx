@@ -11,8 +11,14 @@ export default function CreatePage() {
   const [digits, setDigits] = useState(searchParams.get('digits') || '');
   const [format, setFormat] = useState(searchParams.get('format') || 'auto');
   const [title, setTitle] = useState('');
+  const [productId, setProductId] = useState('');
+  const [aisle, setAisle] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [stores, setStores] = useState(storage.getStores());
+  const [selectedStore, setSelectedStore] = useState(storage.getActiveStore());
+  const [newStoreName, setNewStoreName] = useState('');
+  const [showAddStore, setShowAddStore] = useState(false);
 
   const bs = getStatus(digits, format);
   const qr = isQR(format);
@@ -26,12 +32,41 @@ export default function CreatePage() {
     }
   }, [bs.resolvedFormat, bs.normalized, format]);
 
+  function handleAddStore() {
+    if (!newStoreName.trim()) return;
+    const updated = storage.saveStore(newStoreName);
+    setStores(updated);
+    // Auto-select the newly added store
+    const added = updated.find((s) => s.name.toLowerCase() === newStoreName.trim().toLowerCase());
+    if (added) {
+      setSelectedStore(added.id);
+      storage.setActiveStore(added.id);
+    }
+    setNewStoreName('');
+    setShowAddStore(false);
+  }
+
+  function handleStoreChange(e) {
+    const val = e.target.value;
+    if (val === '__add__') {
+      setShowAddStore(true);
+      return;
+    }
+    setSelectedStore(val);
+    storage.setActiveStore(val);
+  }
+
   function handleSave() {
     if (!bs.normalized) return;
+    const storeName = stores.find((s) => s.id === selectedStore)?.name || '';
     storage.save({
       title: title.trim() || bs.normalized,
       digits: bs.normalized,
       format: bs.resolvedFormat || format,
+      productId: productId.trim(),
+      aisle: aisle.trim(),
+      storeId: selectedStore,
+      storeName,
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -101,6 +136,64 @@ export default function CreatePage() {
       )}
 
       <div className="save-section">
+        <div className="input-group">
+          <label htmlFor="store-select">Store</label>
+          <div className="store-selector">
+            <select
+              id="store-select"
+              value={selectedStore}
+              onChange={handleStoreChange}
+            >
+              <option value="">No store selected</option>
+              {stores.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+              <option value="__add__">+ Add new store...</option>
+            </select>
+          </div>
+          {showAddStore && (
+            <div className="add-store-row">
+              <input
+                type="text"
+                placeholder="Store name"
+                value={newStoreName}
+                onChange={(e) => setNewStoreName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleAddStore()}
+              />
+              <button className="btn btn-small btn-primary" onClick={handleAddStore}>
+                Add
+              </button>
+              <button className="btn btn-small btn-secondary" onClick={() => setShowAddStore(false)}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="input-group">
+          <label htmlFor="aisle-input">Aisle Number</label>
+          <input
+            id="aisle-input"
+            type="text"
+            inputMode="numeric"
+            placeholder="e.g. 5"
+            value={aisle}
+            onChange={(e) => setAisle(e.target.value)}
+          />
+        </div>
+
+        <div className="input-group">
+          <label htmlFor="product-id-input">Product ID</label>
+          <input
+            id="product-id-input"
+            type="text"
+            placeholder="e.g. SKU-12345"
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+          />
+        </div>
+
         <div className="input-group">
           <label htmlFor="title-input">Title (optional)</label>
           <input

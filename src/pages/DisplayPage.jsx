@@ -41,6 +41,29 @@ export default function DisplayPage() {
       <h2 className="display-title">{item.title}</h2>
       <span className="display-format">{formatInfo.label}</span>
 
+      {(item.storeName || item.aisle || item.productId) && (
+        <div className="display-info">
+          {item.productId && (
+            <div className="display-info-row">
+              <span className="display-info-label">Product ID</span>
+              <span className="display-info-value">{item.productId}</span>
+            </div>
+          )}
+          {item.storeName && (
+            <div className="display-info-row">
+              <span className="display-info-label">Store</span>
+              <span className="display-info-value">{item.storeName}</span>
+            </div>
+          )}
+          {item.aisle && (
+            <div className="display-info-row">
+              <span className="display-info-label">Aisle</span>
+              <span className="display-info-value">{item.aisle}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="display-barcode">
         <BarcodeRenderer digits={item.digits} format={item.format} large />
       </div>

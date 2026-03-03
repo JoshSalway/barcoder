@@ -473,6 +473,90 @@ h2 {
   color: var(--text);
 }
 
+/* Store Selector */
+.store-selector select {
+  width: 100%;
+  padding: 0.85rem 1rem;
+  font-size: 1.1rem;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23666' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  padding-right: 2.5rem;
+}
+
+.store-selector select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.add-store-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.add-store-row input {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  font-size: 1rem;
+  border: 2px solid var(--primary);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.add-store-row input:focus {
+  outline: none;
+}
+
+/* Display Page Info Section */
+.display-info {
+  width: 100%;
+  background: var(--surface);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.display-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.35rem 0;
+}
+
+.display-info-row + .display-info-row {
+  border-top: 1px solid var(--border);
+}
+
+.display-info-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.display-info-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* List Item Meta (store/aisle) */
+.item-meta {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--primary);
+  margin-top: 0.15rem;
+}
+
 /* Bottom Navigation */
 .bottom-nav {
   position: fixed;

@@ -1,6 +1,8 @@
 import { nextInSequence } from './barcode.js';
 
 const STORAGE_KEY = 'barcode_items';
+const STORES_KEY = 'barcode_stores';
+const ACTIVE_STORE_KEY = 'barcode_active_store';
 
 function getAll() {
   try {
@@ -36,8 +38,54 @@ function search(query) {
   const q = query.toLowerCase().trim();
   if (!q) return getAll();
   return getAll().filter(
-    (i) => i.title.toLowerCase().includes(q) || i.digits.includes(q)
+    (i) =>
+      i.title.toLowerCase().includes(q) ||
+      i.digits.includes(q) ||
+      (i.productId && i.productId.toLowerCase().includes(q)) ||
+      (i.aisle && i.aisle.toLowerCase().includes(q))
   );
+}
+
+// --- Store management ---
+
+function getStores() {
+  try {
+    return JSON.parse(localStorage.getItem(STORES_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStore(name) {
+  const stores = getStores();
+  const trimmed = name.trim();
+  if (!trimmed) return stores;
+  // Avoid duplicates
+  if (stores.some((s) => s.name.toLowerCase() === trimmed.toLowerCase())) return stores;
+  stores.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: trimmed,
+  });
+  localStorage.setItem(STORES_KEY, JSON.stringify(stores));
+  return stores;
+}
+
+function removeStore(id) {
+  const stores = getStores().filter((s) => s.id !== id);
+  localStorage.setItem(STORES_KEY, JSON.stringify(stores));
+  // Clear active store if it was the removed one
+  if (getActiveStore() === id) {
+    setActiveStore('');
+  }
+  return stores;
+}
+
+function getActiveStore() {
+  return localStorage.getItem(ACTIVE_STORE_KEY) || '';
+}
+
+function setActiveStore(storeId) {
+  localStorage.setItem(ACTIVE_STORE_KEY, storeId);
 }
 
 /**
@@ -94,4 +142,7 @@ function findSequenceGaps() {
   return gaps;
 }
 
-export default { getAll, save, remove, search, findSequenceGaps };
+export default {
+  getAll, save, remove, search, findSequenceGaps,
+  getStores, saveStore, removeStore, getActiveStore, setActiveStore,
+};
