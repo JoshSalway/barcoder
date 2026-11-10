@@ -48,6 +48,7 @@ export default function CreatePage() {
   return (
     <div className="page create-page">
       <h1>Create Barcode</h1>
+      <p className="tagline">Free, no sign-up. Saved barcodes stay on this device.</p>
 
       <div className="input-group">
         <label htmlFor="digits-input">{qr ? 'Content' : 'Digits'}</label>
