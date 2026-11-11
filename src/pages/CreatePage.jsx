@@ -1,30 +1,31 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import BarcodeRenderer from '../components/BarcodeRenderer';
 import BottomNav from '../components/BottomNav';
 import { getStatus, FORMATS, isQR } from '../services/barcode';
 import storage from '../services/storage';
+import { downloadBarcodePng } from '../services/download';
+
+// In auto mode, switch the dropdown to a specifically detected format
+// (not the CODE128 catch-all) so the user sees what was recognised.
+const DETECTED_FORMATS = new Set(['EAN13', 'EAN8', 'UPC', 'ITF14']);
+function pickFormat(digits, format) {
+  if (format !== 'auto') return format;
+  const s = getStatus(digits, 'auto');
+  return s.normalized && DETECTED_FORMATS.has(s.resolvedFormat) ? s.resolvedFormat : 'auto';
+}
 
 export default function CreatePage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [digits, setDigits] = useState(searchParams.get('digits') || '');
-  const [format, setFormat] = useState(searchParams.get('format') || 'auto');
+  const [format, setFormat] = useState(() => pickFormat(searchParams.get('digits') || '', searchParams.get('format') || 'auto'));
+  const previewRef = useRef(null);
   const [title, setTitle] = useState('');
   const [saved, setSaved] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const bs = getStatus(digits, format);
   const qr = isQR(format);
-
-  // Auto-switch dropdown to detected format when in auto mode
-  // Only switch for specifically detected formats (not the CODE128 catch-all)
-  const DETECTED_FORMATS = new Set(['EAN13', 'EAN8', 'UPC', 'ITF14']);
-  useEffect(() => {
-    if (format === 'auto' && bs.resolvedFormat && bs.normalized && DETECTED_FORMATS.has(bs.resolvedFormat)) {
-      setFormat(bs.resolvedFormat);
-    }
-  }, [bs.resolvedFormat, bs.normalized, format]);
 
   function handleSave() {
     if (!bs.normalized) return;
@@ -59,7 +60,7 @@ export default function CreatePage() {
           value={digits}
           onChange={(e) => {
             setDigits(e.target.value);
-            setFormat('auto');
+            setFormat(pickFormat(e.target.value, 'auto'));
             setSaved(false);
           }}
           autoFocus
@@ -71,7 +72,7 @@ export default function CreatePage() {
         <select
           id="format-select"
           value={format}
-          onChange={(e) => setFormat(e.target.value)}
+          onChange={(e) => setFormat(pickFormat(digits, e.target.value))}
         >
           {FORMATS.map((f) => (
             <option key={f.value} value={f.value}>{f.label}</option>
@@ -87,7 +88,7 @@ export default function CreatePage() {
       )}
 
       {bs.normalized && (
-        <div className="barcode-preview">
+        <div className="barcode-preview" ref={previewRef}>
           <BarcodeRenderer digits={bs.normalized} format={bs.resolvedFormat || format} />
         </div>
       )}
@@ -96,6 +97,12 @@ export default function CreatePage() {
         <div className="action-row">
           <button className="btn btn-secondary" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy Digits'}
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={() => downloadBarcodePng(previewRef.current, title.trim() || bs.normalized, qr ? '' : bs.normalized)}
+          >
+            Download PNG
           </button>
         </div>
       )}
