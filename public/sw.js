@@ -26,7 +26,8 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => cached);
+      }).catch(() => cached || (event.request.mode === 'navigate' ? caches.match('/') : undefined));
+      // ^ offline deep links (/list, /display/:id) fall back to the cached app shell
       return cached || fetched;
     })
   );
