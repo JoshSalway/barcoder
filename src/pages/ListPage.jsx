@@ -1,25 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
 import storage from '../services/storage';
 
 export default function ListPage() {
   const navigate = useNavigate();
-  const [items, setItems] = useState([]);
-  const [gaps, setGaps] = useState([]);
   const [query, setQuery] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editTitle, setEditTitle] = useState('');
 
-  useEffect(() => {
-    setItems(query ? storage.search(query) : storage.getAll());
-    if (!query) setGaps(storage.findSequenceGaps());
-  }, [query]);
+  const [, setVersion] = useState(0);
 
-  function refresh() {
-    setItems(query ? storage.search(query) : storage.getAll());
-    if (!query) setGaps(storage.findSequenceGaps());
-  }
+  // localStorage is the source of truth; read it each render and bump `version` after writes.
+  const items = query ? storage.search(query) : storage.getAll();
+  const gaps = query ? [] : storage.findSequenceGaps();
+  const refresh = () => setVersion((v) => v + 1);
 
   function handleDelete(id) {
     storage.remove(id);
