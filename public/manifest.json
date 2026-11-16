@@ -1,6 +1,6 @@
 {
-  "name": "Barcode",
-  "short_name": "Barcode",
+  "name": "Barcoder",
+  "short_name": "Barcoder",
   "start_url": "/scan",
   "display": "standalone",
   "background_color": "#000000",
